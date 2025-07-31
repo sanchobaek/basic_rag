@@ -1,0 +1,14 @@
+# 기존 패키지
+langchain-upstage
+python-dotenv
+jupyter
+ipykernel
+
+# RAG 구축을 위한 추가 패키지
+langchain
+langchain-community
+langchain-anthropic
+langchain-huggingface
+faiss-cpu
+sentence-transformers
+pymupdf
