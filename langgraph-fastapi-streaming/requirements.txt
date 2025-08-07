@@ -1,0 +1,37 @@
+# FastAPI 및 웹 서버
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+
+# Pydantic (데이터 검증)
+pydantic==2.5.0
+
+# LangChain 및 LangGraph - Jupyter 코드와 동일한 버전
+langchain==0.1.20
+langgraph==0.0.69
+langchain-core==0.1.52
+langchain-anthropic==0.1.20
+langchain-huggingface==0.0.3
+langchain-community==0.0.38
+langchain-upstage==0.1.5
+
+# 임베딩 및 벡터 스토어
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+transformers==4.36.2
+torch==2.1.2
+
+# 문서 처리
+python-dotenv==1.0.0
+
+# 추가 유틸리티
+asyncio-mqtt==0.13.0
+aiofiles==23.2.1
+
+# 로깅 및 모니터링 (선택사항)
+python-json-logger==2.0.7
+
+# 개발용 도구들 (선택사항)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
