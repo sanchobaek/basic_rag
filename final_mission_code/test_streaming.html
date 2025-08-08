@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 스트리밍 테스트</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-section {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .response-section {
+            margin-top: 20px;
+        }
+        .response-box {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background: #f9f9f9;
+            min-height: 200px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            overflow-y: auto;
+            max-height: 500px;
+        }
+        .status {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connected { color: green; }
+        .status.streaming { color: blue; }
+        .status.completed { color: green; }
+        .status.error { color: red; }
+        .metadata {
+            background: #e9ecef;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .clear-btn {
+            background: #dc3545;
+            margin-left: 10px;
+        }
+        .clear-btn:hover {
+            background: #c82333;
+        }
+        .history-section {
+            margin-top: 30px;
+        }
+        .history-box {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background: #f8f9fa;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .history-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .history-item.human {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        .history-item.ai {
+            background: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,123,255,.3);
+            border-radius: 50%;
+            border-top-color: #007bff;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 RAG 스트리밍 채팅 테스트</h1>
+        
+        <div class="input-section">
+            <input type="text" id="messageInput" placeholder="질문을 입력하세요..." 
+                   onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()" id="sendBtn">전송</button>
+            <button onclick="clearResponse()" class="clear-btn">초기화</button>
+            <button onclick="loadHistory()">히스토리 로드</button>
+        </div>
+
+        <div class="status" id="status">준비됨</div>
+
+        <div class="response-section">
+            <h3>📝 실시간 응답:</h3>
+            <div class="response-box" id="responseBox"></div>
+            <div class="metadata" id="metadata"></div>
+        </div>
+
+        <div class="history-section">
+            <h3>📚 대화 히스토리:</h3>
+            <button onclick="clearHistory()" class="clear-btn">히스토리 삭제</button>
+            <div class="history-box" id="historyBox"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001';
+        let currentEventSource = null;
+        let isStreaming = false;
+
+        function updateStatus(message, className = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+
+        function appendToResponse(text) {
+            const responseBox = document.getElementById('responseBox');
+            responseBox.textContent += text;
+            responseBox.scrollTop = responseBox.scrollHeight;
+        }
+
+        function setResponse(text) {
+            const responseBox = document.getElementById('responseBox');
+            responseBox.textContent = text;
+        }
+
+        function updateMetadata(data) {
+            const metadataEl = document.getElementById('metadata');
+            metadataEl.textContent = JSON.stringify(data, null, 2);
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            if (isStreaming) {
+                alert('현재 처리 중입니다. 잠시 기다려주세요.');
+                return;
+            }
+
+            // 입력창 비우기
+            messageInput.value = '';
+            
+            // 응답창 초기화
+            setResponse('');
+            updateMetadata({});
+            
+            // 스트리밍 시작
+            startStreaming(message);
+        }
+
+        function startStreaming(message) {
+            isStreaming = true;
+            document.getElementById('sendBtn').disabled = true;
+            updateStatus('연결 중...', 'streaming');
+
+            // 기존 연결이 있다면 종료
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+
+            // POST 요청으로 스트리밍 시작
+            fetch(`${API_BASE}/chat/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    stream: true,
+                    session_id: 'test-session-1'
+                })
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            updateStatus('스트리밍 완료', 'completed');
+                            isStreaming = false;
+                            document.getElementById('sendBtn').disabled = false;
+                            return;
+                        }
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    handleStreamData(data);
+                                } catch (e) {
+                                    console.error('JSON 파싱 오류:', e, line);
+                                }
+                            }
+                        }
+
+                        return readStream();
+                    });
+                }
+
+                readStream().catch(error => {
+                    console.error('스트림 읽기 오류:', error);
+                    updateStatus(`오류: ${error.message}`, 'error');
+                    isStreaming = false;
+                    document.getElementById('sendBtn').disabled = false;
+                });
+
+            }).catch(error => {
+                console.error('요청 오류:', error);
+                updateStatus(`연결 오류: ${error.message}`, 'error');
+                isStreaming = false;
+                document.getElementById('sendBtn').disabled = false;
+            });
+        }
+
+        function handleStreamData(data) {
+            console.log('Stream data:', data);
+            
+            switch (data.type) {
+                case 'connected':
+                    updateStatus('연결됨 ✓', 'connected');
+                    break;
+                    
+                case 'start':
+                    updateStatus('처리 중... ⏳', 'streaming');
+                    break;
+                    
+                case 'chunk':
+                    updateStatus('응답 생성 중... 📝', 'streaming');
+                    appendToResponse(data.content);
+                    if (data.metadata) {
+                        updateMetadata(data.metadata);
+                    }
+                    break;
+                    
+                case 'final':
+                    updateStatus('완료 ✅', 'completed');
+                    if (data.metadata) {
+                        updateMetadata(data.metadata);
+                    }
+                    break;
+                    
+                case 'stream_end':
+                    updateStatus('스트림 종료 🏁', 'completed');
+                    isStreaming = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    break;
+                    
+                case 'error':
+                    updateStatus(`오류: ${data.content}`, 'error');
+                    isStreaming = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    if (data.metadata) {
+                        updateMetadata(data.metadata);
+                    }
+                    break;
+                    
+                case 'cancelled':
+                    updateStatus('취소됨', 'error');
+                    isStreaming = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    break;
+            }
+        }
+
+        function clearResponse() {
+            setResponse('');
+            updateMetadata({});
+            updateStatus('초기화됨', '');
+        }
+
+        function loadHistory() {
+            fetch(`${API_BASE}/chat/history`)
+                .then(response => response.json())
+                .then(data => {
+                    const historyBox = document.getElementById('historyBox');
+                    historyBox.innerHTML = '';
+                    
+                    if (data.history && data.history.length > 0) {
+                        data.history.forEach((msg, index) => {
+                            const div = document.createElement('div');
+                            div.className = `history-item ${msg.type}`;
+                            div.innerHTML = `
+                                <strong>${msg.type === 'human' ? '👤 사용자' : '🤖 AI'}:</strong>
+                                <br>${msg.content}
+                            `;
+                            historyBox.appendChild(div);
+                        });
+                    } else {
+                        historyBox.innerHTML = '<p>대화 히스토리가 없습니다.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('히스토리 로드 오류:', error);
+                    alert('히스토리를 불러올 수 없습니다.');
+                });
+        }
+
+        function clearHistory() {
+            if (!confirm('대화 히스토리를 모두 삭제하시겠습니까?')) return;
+            
+            fetch(`${API_BASE}/chat/history`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    loadHistory();
+                })
+                .catch(error => {
+                    console.error('히스토리 삭제 오류:', error);
+                    alert('히스토리를 삭제할 수 없습니다.');
+                });
+        }
+
+        // 페이지 로드 시 히스토리 로드
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHistory();
+            
+            // 서버 상태 확인
+            fetch(`${API_BASE}/health`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.rag_initialized) {
+                        updateStatus('서버 준비됨 ✅', 'connected');
+                    } else {
+                        updateStatus('서버 초기화 중...', 'streaming');
+                    }
+                })
+                .catch(error => {
+                    updateStatus('서버 연결 실패 ❌', 'error');
+                });
+        });
+    </script>
+</body>
+</html>
