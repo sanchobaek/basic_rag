@@ -1,8 +1,12 @@
 import os
 from urllib.parse import quote_plus
+from dotenv import load_dotenv
 
-# 현재 비밀번호 (! 없는 버전)
-password = "Ahrnta1213"  # 또는 실제 비밀번호
+# .env 파일 로드
+load_dotenv()
+
+# 환경변수에서 비밀번호 읽기
+password = os.getenv("PASSWORD", "")  # 기본값은 빈 문자열
 encoded_password = quote_plus(password)
 
 DATABASE_URL = os.getenv(

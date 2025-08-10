@@ -180,7 +180,7 @@ def router(state: State, rag_components: Dict) -> Dict[str, Any]:
     router_input = f"""
     다음 사용자 쿼리를 분석하고 카테고리를 결정하세요.
     카테고리:
-    - document: 문서 내용에 관한 질문 (예: "아주대학교에 대해 알려줘", "이 문서에서 중요한 내용은?")
+    - document: 아주대에 관한 질문 (예: "아주대학교에 대해 알려줘")
     - general: 일반적인 질문으로, 문서와 관련이 없음 (예: "오늘 날씨 어때?", "파이썬이란?")
     
     쿼리: {user_message}
@@ -275,7 +275,19 @@ def query_transform(state: State, rag_components: Dict) -> Dict[str, Any]:
     )
 
     ai_response = llm.invoke(formatted_message)
-    transformed_query = ai_response.content.strip()
+    
+    # content가 리스트인 경우 처리
+    if isinstance(ai_response.content, list):
+        # 텍스트 부분만 추출
+        text_content = ""
+        for item in ai_response.content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text_content += item.get("text", "")
+            elif isinstance(item, str):
+                text_content += item
+        transformed_query = text_content.strip()
+    else:
+        transformed_query = ai_response.content.strip()
 
     # 쿼리 변환 완료
 
@@ -415,6 +427,7 @@ def general_qa(state: State, rag_components: Dict) -> Dict[str, Any]:
 - 기본적인 인사말
 
 ## 일반적인 상식으로 답변 가능한 질문은 바로 답변해.
+## 너의 생각은 말하지말고, 사용자 질문에 대한 답변만 대답해
         
         이전 대화:
         {chat_history}
