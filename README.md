@@ -28,7 +28,6 @@ PostgreSQL/PGVector 벡터 데이터베이스와 Claude Sonnet을 사용하여 �
 - **FastAPI** 기반 고성능 웹 API
 - **환경변수** 기반 보안 설정
 - **세션 관리** 및 대화 히스토리 지원
-- **CORS** 및 에러 핸들링
 
 ## 🏗️ 아키텍처
 
