@@ -32,29 +32,8 @@ PostgreSQL/PGVector 벡터 데이터베이스와 Claude Sonnet을 사용하여 �
 
 ## 🏗️ 아키텍처
 
-```mermaid
-graph TB
-    C[Client] --> F[FastAPI Server]
-    F --> R[RAG Service]
-    R --> G[LangGraph Router]
-    
-    G --> D[Document QA]
-    G --> GQ[General QA]
-    
-    D --> V[PGVector Search]
-    D --> L[Claude Sonnet]
-    
-    GQ --> T[Tavily Web Search]
-    GQ --> L
-    
-    V --> P[(PostgreSQL + pgvector)]
-    
-    style C fill:#e1f5fe
-    style F fill:#f3e5f5
-    style R fill:#e8f5e8
-    style G fill:#fff3e0
-    style P fill:#fce4ec
-```
+<img width="190" height="350" alt="image" src="https://github.com/user-attachments/assets/ea2f068b-a99f-4218-8c01-9967d1ad1a17" />
+
 
 ## 📁 프로젝트 구조
 
